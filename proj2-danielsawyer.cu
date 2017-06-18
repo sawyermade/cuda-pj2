@@ -1,7 +1,7 @@
 /* ==================================================================
 	Programmer: Daniel Sawyer (danielsawyer@mail.usf.edu)
-	The basic SDH algorithm implementation for 3D data
-	To compile: nvcc proj1-danielsawyer.cu -o SDH in the rc machines
+	The basic SDH algorithm implementation for 3D data with Kernel Execution time
+	To compile: nvcc proj2-danielsawyer.cu -o SDH in the rc machines
    ==================================================================
 */
 
@@ -175,7 +175,7 @@ __global__ void PDH_Cuda(atom *d_atom_list, bucket *d_histogram, long long d_PDH
 	}
 }
 
-void CudaPrep(bucket * histogram2) {
+float CudaPrep(bucket * histogram2) {
 
 	//sizes of atom and bucket arrays
 	int size_atom = sizeof(atom)*PDH_acnt;
@@ -194,6 +194,17 @@ void CudaPrep(bucket * histogram2) {
 	bucket *d_histogram;
 	atom *d_atom_list;
 
+	/* NEW SHIT */
+
+	//kernel execution time crap
+	float elapsedTime;
+	cudaEvent_t start, stop;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+
+	//kernel execution start
+	cudaEventRecord(start, 0);
+
 	//Allocate device memory
 	cudaMalloc((void **) &d_histogram, size_hist);
 	cudaMalloc((void**) &d_atom_list, size_atom);
@@ -208,8 +219,18 @@ void CudaPrep(bucket * histogram2) {
 	//copy new gpu histogram back to host from device
 	cudaMemcpy(histogram2, d_histogram, size_hist, cudaMemcpyDeviceToHost);
 
+	//kernel execution stop
+	cudaEventRecord(stop, 0);
+	cudaEventSynchronize(stop);
+	cudaEventElapsedTime(&elapsedTime, start, stop);
+	cudaEventDestroy(start);
+	cudaEventDestroy(stop);
+
 	//free device memory
 	cudaFree(d_histogram); cudaFree(d_atom_list);
+
+	//returns kernel execution time
+	return elapsedTime;
 }
 
 int main(int argc, char **argv)
@@ -237,7 +258,7 @@ int main(int argc, char **argv)
 	gettimeofday(&startTime, &Idunno);
 	
 	/* call CPU single thread version to compute the histogram */
-	PDH_baseline();
+	//PDH_baseline();
 	
 	/* check the total running time */ 
 	report_running_time();
@@ -256,7 +277,7 @@ int main(int argc, char **argv)
 	gettimeofday(&startTime, &Idunno);
 
 	//run on GPU
-	CudaPrep(histogram2);
+	float elapsedTime = CudaPrep(histogram2);
 
 	//check runtime
 	report_running_time(1);
@@ -270,6 +291,12 @@ int main(int argc, char **argv)
 
 	//Free memory.
 	free(histogram); free(atom_list);
+
+	//prints kernel execution time in milliseconds.
+	printf("\n******** Total Running Time of Kernel = %0.5f ms *******\n", elapsedTime);
+
+	//prints kernel execution time in seconds.
+	printf("\n******** Total Running Time of Kernel = %0.5f sec *******\n", elapsedTime/1000);
 	
 	return 0;
 }

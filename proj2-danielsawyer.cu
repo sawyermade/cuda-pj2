@@ -155,7 +155,7 @@ int PDH_baseline() {
 }
 
 //CUDA KERNEL FOR SDH
-__global__ void PDH_Cuda(atom *d_atom_list, bucket *d_histogram, long long d_PDH_acnt, double d_PDH_res) {
+__global__ void PDH_Cuda_0(atom *d_atom_list, bucket *d_histogram, long long d_PDH_acnt, double d_PDH_res) {
 
 	double dist;
 	int i, j, h_pos;
@@ -173,6 +173,13 @@ __global__ void PDH_Cuda(atom *d_atom_list, bucket *d_histogram, long long d_PDH
 		//d_histogram[h_pos].d_cnt++;
 		//__syncthreads();
 	}
+}
+
+//CUDA KERNEL FOR SDH NEW
+__global__ void PDH_Cuda_1(atom *d_atom_list, bucket *d_histogram, long long d_PDH_acnt, double d_PDH_res) {
+
+	//code goes here.
+
 }
 
 float CudaPrep(bucket * histogram2) {
@@ -214,7 +221,7 @@ float CudaPrep(bucket * histogram2) {
 	cudaMemset(d_histogram, 0, size_hist);
 
 	//run cuda kernel
-	PDH_Cuda<<<grid,threads>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res);
+	PDH_Cuda_0<<<grid,threads>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res);
 
 	//copy new gpu histogram back to host from device
 	cudaMemcpy(histogram2, d_histogram, size_hist, cudaMemcpyDeviceToHost);
@@ -293,7 +300,7 @@ int main(int argc, char **argv)
 	free(histogram); free(atom_list);
 
 	//prints kernel execution time in milliseconds.
-	printf("\n******** Total Running Time of Kernel = %0.5f ms *******\n", elapsedTime);
+	//printf("\n******** Total Running Time of Kernel = %0.5f ms *******\n", elapsedTime);
 
 	//prints kernel execution time in seconds.
 	printf("\n******** Total Running Time of Kernel = %0.5f sec *******\n", elapsedTime/1000);

@@ -364,7 +364,7 @@ int main(int argc, char **argv)
 	free(histogram); free(atom_list);
 
 	//prints kernel execution time in milliseconds.
-	//printf("\n******** Total Running Time of Kernel = %0.5f ms *******\n", elapsedTime);
+	printf("\n******** Total Running Time of Kernel = %0.5f ms *******\n", elapsedTime);
 
 	//prints kernel execution time in seconds.
 	printf("\n******** Total Running Time of Kernel = %0.5f sec *******\n", elapsedTime/1000);

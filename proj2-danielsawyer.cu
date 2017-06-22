@@ -250,35 +250,26 @@ __global__ void PDH_Cuda_2(atom *d_atom_list, bucket *d_histogram, long long d_P
 	register double dist;
 	register int i, j, h_pos;
 	register atom part;
-	extern __shared__ atom s_atom_list[];
-	//register atom s_atom_list[32];
 	
+	extern __shared__ bucket s_histogram[];
+	__shared__ atom s_atom_list[32];
 
-	//partnum = threadIdx.x + blockDim.x * blockIdx.x;
 	part = d_atom_list[threadIdx.x + blockDim.x * blockIdx.x];
-	//printf("\nblock Dim = %d", blockDim.x);
-	//left[threadIdx.x] = d_atom_list[threadIdx.x + blockDim.x * blockIdx.x];
-	//__syncthreads();
-	//printf("\npartnum = %d\n", partnum);
-	//printf("\nblockIdx.x = %d\n", blockIdx.x);
-	//printf("\nnblocks = %d\n", nblocks);
-	//printf("\ns_hist = %lu\n", s_histogram[nbuckets-1].d_cnt);
-	if(threadIdx.x + blockDim.x * blockIdx.x < d_PDH_acnt)
+
+
+	for(i = threadIdx.x; i < nbuckets; i += blockDim.x) {
+		s_histogram[i].d_cnt = 0;
+	}
+	__syncthreads();
+	
+	if(threadIdx.x + blockDim.x * blockIdx.x < d_PDH_acnt) {
+	//#pragma unroll
 	for(i = blockIdx.x + 1; i < nblocks; ++i) {
-		// if(i == 1 && threadIdx.x < nbuckets && threadIdx.x + blockDim.x * blockIdx.x < d_PDH_acnt)
-		// 	printf("\nblock = %d thread = %d s_hist = %lu\n", blockIdx.x, threadIdx.x, s_histogram[0]);
-		//printf("\nblockIdx = %d\n", i);
+		
 		s_atom_list[threadIdx.x] = d_atom_list[i*blockDim.x + threadIdx.x];
-		//__syncthreads(); //maybe?
-		//printf("\nthreadIdx = %d\n", s_atom_list[threadIdx.x].x_pos);
-		//printf("\nblockIdx = %d\n", blockIdx.x);
 
 		if(i*blockDim.x < d_PDH_acnt)
 		for(j = 0; j < blockDim.x; ++j) {
-			//printf("\ndist = %f\n", dist);
-			//printf("\nalist part x = %f\n", s_atom_list[part].x_pos);
-			// if(j == 2)
-			// 	printf("\ns_hist = %lu\n", s_histogram[0].d_cnt);
 
 			if(i*blockDim.x + j < d_PDH_acnt) {
 				dist = sqrt(
@@ -292,18 +283,16 @@ __global__ void PDH_Cuda_2(atom *d_atom_list, bucket *d_histogram, long long d_P
 				h_pos = (int)(dist/d_PDH_res);
 				//printf("\nh_pos = %d\n", h_pos);
 
-				atomicAdd((unsigned long long int*)&d_histogram[h_pos].d_cnt,1);
-				//atomicAdd((unsigned long long int*)&s_histogram[h_pos].d_cnt,1);
-				//s_histogram[h_pos].d_cnt++;
-				//__syncthreads(); //maybe?
-				// if(j == 5 && threadIdx.x < nbuckets)
-				// 	printf("\ns_hist = %lu\n", s_histogram[0].d_cnt);
+				atomicAdd((unsigned long long int*)&s_histogram[h_pos].d_cnt,1);
+				// __syncthreads(); //maybe?
 			}
-			//__syncthreads(); //maybe?
+			// __syncthreads(); //maybe?
 			//printf()
 		}
 		//__syncthreads(); //maybe?
-	}
+	}}
+
+
 	s_atom_list[threadIdx.x] = part;
 	//__syncthreads();
 	if(threadIdx.x + blockDim.x * blockIdx.x < d_PDH_acnt)
@@ -317,16 +306,13 @@ __global__ void PDH_Cuda_2(atom *d_atom_list, bucket *d_histogram, long long d_P
 
 			h_pos = (int)(dist/d_PDH_res);
 
-			atomicAdd((unsigned long long int*)&d_histogram[h_pos].d_cnt,1);
-			//atomicAdd((unsigned long long int*)&s_histogram[h_pos].d_cnt,1);
-			//__syncthreads(); //maybe?
+			atomicAdd((unsigned long long int*)&s_histogram[h_pos].d_cnt,1);
 		}
 	}
 
-	// __syncthreads(); //maybe?
-	// if(threadIdx.x < nbuckets) {
-	// 	atomicAdd((unsigned long long int*)&d_histogram[threadIdx.x].d_cnt, s_histogram[threadIdx.x]);
-	// }
+	for(i = threadIdx.x; i < nbuckets; i += blockDim.x) {
+		atomicAdd((unsigned long long int*)&d_histogram[i].d_cnt,s_histogram[i].d_cnt);
+	}
 }
 
 float CudaPrep(bucket * histogram2) {
@@ -372,8 +358,8 @@ float CudaPrep(bucket * histogram2) {
 	//PDH_Cuda_0<<<grid,threads>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res);
 	//PDH_Cuda_1<<<grid,threads,threads.x*sizeof(atom)>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res, threads.x, grid.x, num_buckets);
 	//PDH_Cuda_1<<<grid,threads>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res, threads.x, grid.x, num_buckets);
-	PDH_Cuda_2<<<grid,threads,threads.x*sizeof(atom) + num_buckets*sizeof(unsigned int)>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res, threads.x, grid.x, num_buckets);
-	//PDH_Cuda_2<<<grid,threads,num_buckets*sizeof(unsigned int)>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res, threads.x, grid.x, num_buckets);
+	//PDH_Cuda_2<<<grid,threads,threads.x*sizeof(atom) + num_buckets*sizeof(unsigned int)>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res, threads.x, grid.x, num_buckets);
+	PDH_Cuda_2<<<grid,threads,num_buckets*sizeof(bucket)>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res, threads.x, grid.x, num_buckets);
 
 	//copy new gpu histogram back to host from device
 	cudaMemcpy(histogram2, d_histogram, size_hist, cudaMemcpyDeviceToHost);
@@ -457,7 +443,7 @@ int main(int argc, char **argv)
 	free(histogram); free(atom_list);
 
 	//prints kernel execution time in milliseconds.
-	//printf("\n******** Total Running Time of Kernel = %0.5f ms *******\n", elapsedTime);
+	printf("\n******** Total Running Time of Kernel = %0.5f ms *******\n", elapsedTime);
 
 	//prints kernel execution time in seconds.
 	printf("\n******** Total Running Time of Kernel = %0.5f sec *******\n", elapsedTime/1000);

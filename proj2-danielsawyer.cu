@@ -403,7 +403,7 @@ int main(int argc, char **argv)
 	gettimeofday(&startTime, &Idunno);
 	
 	/* call CPU single thread version to compute the histogram */
-	PDH_baseline();
+	//PDH_baseline();
 	
 	/* check the total running time */ 
 	report_running_time();

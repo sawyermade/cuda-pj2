@@ -252,7 +252,7 @@ __global__ void PDH_Cuda_2(atom *d_atom_list, bucket *d_histogram, long long d_P
 	register atom part, part2;
 	
 	extern __shared__ bucket s_histogram[];
-	__shared__ atom s_atom_list[128];
+	__shared__ atom s_atom_list[32];
 
 	
 	part = d_atom_list[threadIdx.x + blockDim.x * blockIdx.x];
@@ -318,6 +318,37 @@ __global__ void PDH_Cuda_2(atom *d_atom_list, bucket *d_histogram, long long d_P
 	}
 }
 
+//CUDA KERNEL FOR SDH
+__global__ void PDH_Cuda_3(atom *d_atom_list, bucket *d_histogram, long long d_PDH_acnt, double d_PDH_res, int nbuckets) {
+
+	double dist;
+	int i, j, h_pos;
+
+	extern __shared__ bucket s_histogram[];
+
+	for(i = threadIdx.x; i < nbuckets; i += blockDim.x) {
+		s_histogram[i].d_cnt = 0;
+	}
+	__syncthreads();
+
+	i = threadIdx.x + blockDim.x * blockIdx.x;
+
+	for(j = i+1; j < d_PDH_acnt; ++j) {
+
+		dist = sqrt( (d_atom_list[i].x_pos - d_atom_list[j].x_pos)*(d_atom_list[i].x_pos - d_atom_list[j].x_pos) +
+					 (d_atom_list[i].y_pos - d_atom_list[j].y_pos)*(d_atom_list[i].y_pos - d_atom_list[j].y_pos) +
+					 (d_atom_list[i].z_pos - d_atom_list[j].z_pos)*(d_atom_list[i].z_pos - d_atom_list[j].z_pos) );
+		h_pos = (int)(dist/d_PDH_res);		
+		atomicAdd((unsigned long long int*)&s_histogram[h_pos].d_cnt,1);
+		//d_histogram[h_pos].d_cnt++;
+		//__syncthreads();
+	}
+
+	for(i = threadIdx.x; i < nbuckets; i += blockDim.x) {
+		atomicAdd((unsigned long long int*)&d_histogram[i].d_cnt,s_histogram[i].d_cnt);
+	}
+}
+
 float CudaPrep(bucket * histogram2) {
 
 	//sizes of atom and bucket arrays
@@ -330,7 +361,7 @@ float CudaPrep(bucket * histogram2) {
     cudaDeviceProp deviceProp;
     cudaGetDeviceProperties(&deviceProp, dev);
 	//printf("\nWARP = %d\n", deviceProp.warpSize);
-	dim3 threads(128);
+	dim3 threads(32);
 	//dim3 threads(deviceProp.warpSize);
 	dim3 grid(ceil((float)PDH_acnt/threads.x));
 
@@ -362,7 +393,8 @@ float CudaPrep(bucket * histogram2) {
 	//PDH_Cuda_1<<<grid,threads,threads.x*sizeof(atom)>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res, threads.x, grid.x, num_buckets);
 	//PDH_Cuda_1<<<grid,threads>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res, threads.x, grid.x, num_buckets);
 	//PDH_Cuda_2<<<grid,threads,threads.x*sizeof(atom) + num_buckets*sizeof(unsigned int)>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res, threads.x, grid.x, num_buckets);
-	PDH_Cuda_2<<<grid,threads,num_buckets*sizeof(bucket)>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res, threads.x, grid.x, num_buckets);
+	//PDH_Cuda_2<<<grid,threads,num_buckets*sizeof(bucket)>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res, threads.x, grid.x, num_buckets);
+	PDH_Cuda_3<<<grid,threads, num_buckets*sizeof(bucket)>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res, num_buckets);
 
 	//copy new gpu histogram back to host from device
 	cudaMemcpy(histogram2, d_histogram, size_hist, cudaMemcpyDeviceToHost);

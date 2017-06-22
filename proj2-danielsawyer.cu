@@ -269,7 +269,7 @@ __global__ void PDH_Cuda_2(atom *d_atom_list, bucket *d_histogram, long long d_P
 		// 	printf("\nblock = %d thread = %d s_hist = %lu\n", blockIdx.x, threadIdx.x, s_histogram[0]);
 		//printf("\nblockIdx = %d\n", i);
 		s_atom_list[threadIdx.x] = d_atom_list[i*blockDim.x + threadIdx.x];
-		__syncthreads(); //maybe?
+		//__syncthreads(); //maybe?
 		//printf("\nthreadIdx = %d\n", s_atom_list[threadIdx.x].x_pos);
 		//printf("\nblockIdx = %d\n", blockIdx.x);
 
@@ -299,13 +299,13 @@ __global__ void PDH_Cuda_2(atom *d_atom_list, bucket *d_histogram, long long d_P
 				// if(j == 5 && threadIdx.x < nbuckets)
 				// 	printf("\ns_hist = %lu\n", s_histogram[0].d_cnt);
 			}
-			__syncthreads(); //maybe?
+			//__syncthreads(); //maybe?
 			//printf()
 		}
 		//__syncthreads(); //maybe?
 	}
 	s_atom_list[threadIdx.x] = part;
-	__syncthreads();
+	//__syncthreads();
 	if(threadIdx.x + blockDim.x * blockIdx.x < d_PDH_acnt)
 	for(i = threadIdx.x + 1; i < blockDim.x; ++i) {
 

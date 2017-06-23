@@ -262,6 +262,8 @@ __global__ void PDH_Cuda_2(atom *d_atom_list, bucket *d_histogram, long long d_P
 	}
 	__syncthreads();
 	
+	//printf("\npart x = %f", part.x_pos);
+
 	if(threadIdx.x + blockDim.x * blockIdx.x < d_PDH_acnt) {
 	//#pragma unroll
 	for(i = blockIdx.x + 1; i < nblocks; ++i) {
@@ -282,8 +284,8 @@ __global__ void PDH_Cuda_2(atom *d_atom_list, bucket *d_histogram, long long d_P
 					// (part.y_pos - part2.y_pos)*(part.y_pos - part2.y_pos) +
 					// (part.z_pos - part2.z_pos)*(part.z_pos - part2.z_pos));
 
-				//if(j == 2)
-					//printf("\ndist = %f\n", dist);
+				// if(j == 2)
+				// 	printf("\ndist = %f\n", dist);
 				//__syncthreads();
 				h_pos = (int)(dist/d_PDH_res);
 				//printf("\nh_pos = %d\n", h_pos);
@@ -306,9 +308,9 @@ __global__ void PDH_Cuda_2(atom *d_atom_list, bucket *d_histogram, long long d_P
 		if(blockDim.x*blockIdx.x + i < d_PDH_acnt) {
 			//part2 = s_atom_list[i];
 			dist = sqrt(
-				(part.x_pos - s_atom_list[j].x_pos)*(part.x_pos - s_atom_list[j].x_pos) +
-				(part.y_pos - s_atom_list[j].y_pos)*(part.y_pos - s_atom_list[j].y_pos) +
-				(part.z_pos - s_atom_list[j].z_pos)*(part.z_pos - s_atom_list[j].z_pos));
+				(part.x_pos - s_atom_list[i].x_pos)*(part.x_pos - s_atom_list[i].x_pos) +
+				(part.y_pos - s_atom_list[i].y_pos)*(part.y_pos - s_atom_list[i].y_pos) +
+				(part.z_pos - s_atom_list[i].z_pos)*(part.z_pos - s_atom_list[i].z_pos));
 				// (part.x_pos - part2.x_pos)*(part.x_pos - part2.x_pos) +
 				// (part.y_pos - part2.y_pos)*(part.y_pos - part2.y_pos) +
 				// (part.z_pos - part2.z_pos)*(part.z_pos - part2.z_pos));

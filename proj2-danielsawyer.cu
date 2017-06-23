@@ -249,10 +249,11 @@ __global__ void PDH_Cuda_2(atom *d_atom_list, bucket *d_histogram, long long d_P
 	//code goes here.
 	register double dist;
 	register int i, j, h_pos;
-	register atom part, part2;
+	register atom part;
+	//register atom part2;
 	
 	extern __shared__ bucket s_histogram[];
-	__shared__ atom s_atom_list[128];
+	__shared__ atom s_atom_list[32];
 
 	
 	part = d_atom_list[threadIdx.x + blockDim.x * blockIdx.x];
@@ -272,11 +273,14 @@ __global__ void PDH_Cuda_2(atom *d_atom_list, bucket *d_histogram, long long d_P
 		for(j = 0; j < blockDim.x; ++j) {
 			
 			if(i*blockDim.x + j < d_PDH_acnt) {
-				part2 = s_atom_list[j];
+				//part2 = s_atom_list[j];
 				dist = sqrt(
-					(part.x_pos - part2.x_pos)*(part.x_pos - part2.x_pos) +
-					(part.y_pos - part2.y_pos)*(part.y_pos - part2.y_pos) +
-					(part.z_pos - part2.z_pos)*(part.z_pos - part2.z_pos));
+					(part.x_pos - s_atom_list[j].x_pos)*(part.x_pos - s_atom_list[j].x_pos) +
+					(part.y_pos - s_atom_list[j].y_pos)*(part.y_pos - s_atom_list[j].y_pos) +
+					(part.z_pos - s_atom_list[j].z_pos)*(part.z_pos - s_atom_list[j].z_pos));
+					// (part.x_pos - part2.x_pos)*(part.x_pos - part2.x_pos) +
+					// (part.y_pos - part2.y_pos)*(part.y_pos - part2.y_pos) +
+					// (part.z_pos - part2.z_pos)*(part.z_pos - part2.z_pos));
 
 				//if(j == 2)
 					//printf("\ndist = %f\n", dist);
@@ -300,11 +304,14 @@ __global__ void PDH_Cuda_2(atom *d_atom_list, bucket *d_histogram, long long d_P
 	for(i = threadIdx.x + 1; i < blockDim.x; ++i) {
 		
 		if(blockDim.x*blockIdx.x + i < d_PDH_acnt) {
-			part2 = s_atom_list[i];
+			//part2 = s_atom_list[i];
 			dist = sqrt(
-				(part.x_pos - part2.x_pos)*(part.x_pos - part2.x_pos) +
-				(part.y_pos - part2.y_pos)*(part.y_pos - part2.y_pos) +
-				(part.z_pos - part2.z_pos)*(part.z_pos - part2.z_pos));
+				(part.x_pos - s_atom_list[j].x_pos)*(part.x_pos - s_atom_list[j].x_pos) +
+				(part.y_pos - s_atom_list[j].y_pos)*(part.y_pos - s_atom_list[j].y_pos) +
+				(part.z_pos - s_atom_list[j].z_pos)*(part.z_pos - s_atom_list[j].z_pos));
+				// (part.x_pos - part2.x_pos)*(part.x_pos - part2.x_pos) +
+				// (part.y_pos - part2.y_pos)*(part.y_pos - part2.y_pos) +
+				// (part.z_pos - part2.z_pos)*(part.z_pos - part2.z_pos));
 
 			h_pos = (int)(dist/d_PDH_res);
 
@@ -330,7 +337,7 @@ float CudaPrep(bucket * histogram2) {
     cudaDeviceProp deviceProp;
     cudaGetDeviceProperties(&deviceProp, dev);
 	//printf("\nWARP = %d\n", deviceProp.warpSize);
-	dim3 threads(128);
+	dim3 threads(32);
 	//dim3 threads(deviceProp.warpSize);
 	dim3 grid(ceil((float)PDH_acnt/threads.x));
 
@@ -357,12 +364,15 @@ float CudaPrep(bucket * histogram2) {
 	cudaMemcpy(d_atom_list, atom_list, size_atom, cudaMemcpyHostToDevice);
 	cudaMemset(d_histogram, 0, size_hist);
 
+	
 	//run cuda kernel
 	//PDH_Cuda_0<<<grid,threads>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res);
 	//PDH_Cuda_1<<<grid,threads,threads.x*sizeof(atom)>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res, threads.x, grid.x, num_buckets);
 	//PDH_Cuda_1<<<grid,threads>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res, threads.x, grid.x, num_buckets);
 	//PDH_Cuda_2<<<grid,threads,threads.x*sizeof(atom) + num_buckets*sizeof(unsigned int)>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res, threads.x, grid.x, num_buckets);
 	PDH_Cuda_2<<<grid,threads,num_buckets*sizeof(bucket)>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res, threads.x, grid.x, num_buckets);
+
+	
 
 	//copy new gpu histogram back to host from device
 	cudaMemcpy(histogram2, d_histogram, size_hist, cudaMemcpyDeviceToHost);

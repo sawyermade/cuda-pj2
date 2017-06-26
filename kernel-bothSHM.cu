@@ -60,9 +60,9 @@ __global__ void PDH_Cuda_2(atom *d_atom_list, bucket *d_histogram, long long d_P
 		if(blockDim.x*blockIdx.x + i < d_PDH_acnt) {
 			//part2 = s_atom_list[i];
 			dist = sqrt(
-				(part.x_pos - s_atom_list[j].x_pos)*(part.x_pos - s_atom_list[j].x_pos) +
-				(part.y_pos - s_atom_list[j].y_pos)*(part.y_pos - s_atom_list[j].y_pos) +
-				(part.z_pos - s_atom_list[j].z_pos)*(part.z_pos - s_atom_list[j].z_pos));
+				(part.x_pos - s_atom_list[i].x_pos)*(part.x_pos - s_atom_list[i].x_pos) +
+				(part.y_pos - s_atom_list[i].y_pos)*(part.y_pos - s_atom_list[i].y_pos) +
+				(part.z_pos - s_atom_list[i].z_pos)*(part.z_pos - s_atom_list[i].z_pos));
 				// (part.x_pos - part2.x_pos)*(part.x_pos - part2.x_pos) +
 				// (part.y_pos - part2.y_pos)*(part.y_pos - part2.y_pos) +
 				// (part.z_pos - part2.z_pos)*(part.z_pos - part2.z_pos));

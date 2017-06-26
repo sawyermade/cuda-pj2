@@ -253,7 +253,7 @@ __global__ void PDH_Cuda_2(atom *d_atom_list, bucket *d_histogram, long long d_P
 	//register atom part2;
 	
 	extern __shared__ bucket s_histogram[];
-	__shared__ atom s_atom_list[32];
+	__shared__ atom s_atom_list[128];
 
 	
 	part = d_atom_list[threadIdx.x + blockDim.x * blockIdx.x];
@@ -339,7 +339,7 @@ float CudaPrep(bucket * histogram2) {
     cudaDeviceProp deviceProp;
     cudaGetDeviceProperties(&deviceProp, dev);
 	//printf("\nWARP = %d\n", deviceProp.warpSize);
-	dim3 threads(32);
+	dim3 threads(128);
 	//dim3 threads(deviceProp.warpSize);
 	dim3 grid(ceil((float)PDH_acnt/threads.x));
 
@@ -355,9 +355,6 @@ float CudaPrep(bucket * histogram2) {
 	cudaEventCreate(&start);
 	cudaEventCreate(&stop);
 
-	//kernel execution start
-	cudaEventRecord(start, 0);
-
 	//Allocate device memory
 	cudaMalloc((void **) &d_histogram, size_hist);
 	cudaMalloc((void**) &d_atom_list, size_atom);
@@ -366,6 +363,8 @@ float CudaPrep(bucket * histogram2) {
 	cudaMemcpy(d_atom_list, atom_list, size_atom, cudaMemcpyHostToDevice);
 	cudaMemset(d_histogram, 0, size_hist);
 
+	//kernel execution start
+	cudaEventRecord(start, 0);
 	
 	//run cuda kernel
 	//PDH_Cuda_0<<<grid,threads>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res);
@@ -374,17 +373,15 @@ float CudaPrep(bucket * histogram2) {
 	//PDH_Cuda_2<<<grid,threads,threads.x*sizeof(atom) + num_buckets*sizeof(unsigned int)>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res, threads.x, grid.x, num_buckets);
 	PDH_Cuda_2<<<grid,threads,num_buckets*sizeof(bucket)>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res, threads.x, grid.x, num_buckets);
 
-	
-
-	//copy new gpu histogram back to host from device
-	cudaMemcpy(histogram2, d_histogram, size_hist, cudaMemcpyDeviceToHost);
-
 	//kernel execution stop
 	cudaEventRecord(stop, 0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&elapsedTime, start, stop);
 	cudaEventDestroy(start);
 	cudaEventDestroy(stop);
+
+	//copy new gpu histogram back to host from device
+	cudaMemcpy(histogram2, d_histogram, size_hist, cudaMemcpyDeviceToHost);
 
 	//free device memory
 	cudaFree(d_histogram); cudaFree(d_atom_list);

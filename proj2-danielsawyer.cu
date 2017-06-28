@@ -304,6 +304,7 @@ float CudaPrep(bucket * histogram2) {
 	//kernel execution stop
 	//cudaDeviceSynchronize();
 	cudaEventRecord(stop, 0);
+	cudaEventSynchronize(start);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&elapsedTime, start, stop);
 	cudaEventDestroy(start);
@@ -362,7 +363,7 @@ int main(int argc, char **argv)
 
 	//New histogram that will come from the device
 	bucket *histogram2 = (bucket*)malloc(sizeof(bucket)*num_buckets);
-	memset(histogram2, 0, size_hist);
+	memset(histogram2, 0, sizeof(bucket)*num_buckets);
 
 	//start time
 	gettimeofday(&startTime, &Idunno);

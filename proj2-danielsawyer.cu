@@ -155,6 +155,10 @@ int PDH_baseline() {
 	return 0;
 }
 
+
+/**********	KERNEL STUFF **********/
+
+
 __device__ double pdist(atom &L, atom &R) {
 
 	double x = L.x_pos - R.x_pos;
@@ -163,9 +167,6 @@ __device__ double pdist(atom &L, atom &R) {
 
 	return sqrt(x*x + y*y + z*z);
 }
-
-
-/**********	KERNEL STUFF **********/
 
 //NAIVE
 __global__ void Naive(atom* dev_points, bucket *dev_Hist, int d_PDH_acnt, int d_PDH_res) {

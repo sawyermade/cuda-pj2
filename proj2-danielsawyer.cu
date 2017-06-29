@@ -196,17 +196,17 @@ __global__ void PDH_Algo3(atom *d_atom_list, bucket *d_histogram, long long d_PD
 
 	//vars
 	register double dist;
-	register int i, j, h_pos, tx = threadIdx.x, dx = blockDim.x, bx = blockIdx.x;
+	register int i, j, h_pos, tx = threadIdx.x, bdx = blockDim.x, bx = blockIdx.x;
 	register long long tid = threadIdx.x + blockDim.x * blockIdx.x;
 	register atom L;
 
 	//shared vars
 	extern __shared__ atom smem[];
 	atom* R = (atom*)smem;
-	bucket* s_histogram = (bucket*)&smem[dx];
+	bucket* s_histogram = (bucket*)&smem[bdx];
 	
 	//initialize histogram to 0 and load L in parallel
-	for(i = tx; i < nbuckets; i += dx)
+	for(i = tx; i < nbuckets; i += bdx)
 		s_histogram[i].d_cnt = 0;
 
 	L = d_atom_list[tid];
@@ -216,14 +216,14 @@ __global__ void PDH_Algo3(atom *d_atom_list, bucket *d_histogram, long long d_PD
 	for(i = bx + 1; i < nblocks; i++) {
 
 		//loads tile of atoms into shared mem
-		R[tx] = d_atom_list[tx + i*dx];
+		R[tx] = d_atom_list[tx + i*bdx];
 		__syncthreads();
 
 		//runs through the shared mem, saves to hist
-		if(i*dx < d_PDH_acnt)
-		for(j = 0; j < dx; j++) {
+		if(i*bdx < d_PDH_acnt)
+		for(j = 0; j < bdx; j++) {
 			
-			if(j + i*dx < d_PDH_acnt) {
+			if(j + i*bdx < d_PDH_acnt) {
 
 				dist = pdist(L, R[j]);
 
@@ -241,9 +241,9 @@ __global__ void PDH_Algo3(atom *d_atom_list, bucket *d_histogram, long long d_PD
 
 	//calcs distances for current block
 	if(tid < d_PDH_acnt)
-	for(j = tx + 1; j < dx; j++) {
+	for(j = tx + 1; j < bdx; j++) {
 
-		if(j + bx*dx < d_PDH_acnt) {
+		if(j + bx*bdx < d_PDH_acnt) {
 
 			dist = pdist(L, R[j]);
 
@@ -255,7 +255,7 @@ __global__ void PDH_Algo3(atom *d_atom_list, bucket *d_histogram, long long d_PD
 	__syncthreads();
 
 	//saves back to global
-	for(i = tx; i < nbuckets; i += dx)
+	for(i = tx; i < nbuckets; i += bdx)
 		atomicAdd((unsigned long long int*)&d_histogram[i].d_cnt,s_histogram[i].d_cnt);
 }
 

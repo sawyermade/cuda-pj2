@@ -37,7 +37,7 @@ long long	PDH_acnt;	/* total number of data points            */
 int num_buckets;		/* total number of buckets in the histogram */
 double   PDH_res;		/* value of w                             */
 atom * atom_list;		/* list of all data points                */
-int blockSize;
+int blockSize;			/* 3rd argument,blocksize for cuda kernel */
 
 /* These are for an old way of tracking time */
 struct timezone Idunno;
@@ -327,12 +327,16 @@ int main(int argc, char **argv)
 		printf("\nError, too few arguments. Usage: ./proj2 {#of_samples} {bucket_width} {block_size}.\n");
 		return -1;
 	}
+	if(atoi(argv[3]) > 1024) {
+
+		printf("\nError, blocksize cant be larger than 1024. Usage: ./proj2 {#of_samples} {bucket_width} {block_size}.\n");
+	}
 
 	int i;
 
 	PDH_acnt = atoi(argv[1]);
 	PDH_res	 = atof(argv[2]);
-	blockSize = atof(argv[3]);
+	blockSize = atoi(argv[3]);
 
 	num_buckets = (int)(BOX_SIZE * 1.732 / PDH_res) + 1;
 	histogram = (bucket *)malloc(sizeof(bucket)*num_buckets);

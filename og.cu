@@ -1,6 +1,6 @@
 /* ==================================================================
 	Programmer: Daniel Sawyer (danielsawyer@mail.usf.edu)
-	The basic SDH algorithm implementation for 3D data with Kernel Execution time
+	The basic SDH algorithm implementation for 3D data
 	To compile: nvcc proj2-danielsawyer.cu -o SDH in the rc machines
    ==================================================================
 */
@@ -154,88 +154,136 @@ int PDH_baseline() {
 	return 0;
 }
 
-//CUDA KERNEL FOR SDH
-__global__ void PDH_Cuda_0(atom *d_atom_list, bucket *d_histogram, long long d_PDH_acnt, double d_PDH_res) {
+//CUDA KERNEL ALGO 1
+__global__ void PDH_Algo1(atom *d_atom_list, bucket *d_histogram, long long d_PDH_acnt, double d_PDH_res) {
 
-	double dist;
-	int i, j, h_pos;
+	register double dist, xt, yt, zt;
+	register int i, j, h_pos;
 
 	i = threadIdx.x + blockDim.x * blockIdx.x;
-	//if(i == 0) printf("\nTHE I VALUE = 0\n");
-	//if(i == 0) printf("\nwarpSize = %d\n", warpSize);
+
 	for(j = i+1; j < d_PDH_acnt; ++j) {
 
-		dist = sqrt( (d_atom_list[i].x_pos - d_atom_list[j].x_pos)*(d_atom_list[i].x_pos - d_atom_list[j].x_pos) +
-					 (d_atom_list[i].y_pos - d_atom_list[j].y_pos)*(d_atom_list[i].y_pos - d_atom_list[j].y_pos) +
-					 (d_atom_list[i].z_pos - d_atom_list[j].z_pos)*(d_atom_list[i].z_pos - d_atom_list[j].z_pos) );
+		xt = d_atom_list[i].x_pos - d_atom_list[j].x_pos;
+		yt = d_atom_list[i].y_pos - d_atom_list[j].y_pos;
+		zt = d_atom_list[i].z_pos - d_atom_list[j].z_pos;
+
+		dist = sqrt(xt*xt + yt*yt + zt*zt);
+
 		h_pos = (int)(dist/d_PDH_res);		
 		atomicAdd((unsigned long long int*)&d_histogram[h_pos].d_cnt,1);
-		//d_histogram[h_pos].d_cnt++;
-		//__syncthreads();
 	}
 }
 
-//CUDA KERNEL FOR SDH NEW
-__global__ void PDH_Cuda_1(atom *d_atom_list, bucket *d_histogram, long long d_PDH_acnt, double d_PDH_res, int bsize, int nblocks, int nbuckets) {
+//CUDA KERNEL ALGO 2
+__global__ void PDH_Algo2(atom *d_atom_list, bucket *d_histogram, long long d_PDH_acnt, double d_PDH_res, int nbuckets, int nblocks) {
 
-	//code goes here.
-	register double dist;
+	register double dist, xt, yt, zt;
 	register int i, j, h_pos;
-	//atom part;
-	// extern __shared__ atom s_atom_list[32];
-	// extern __shared__ atom left[32];
-	__shared__ atom s_atom_list[32];
-	__shared__ atom left[32];
-	//__shared__ bucket s_histogram[nbuckets];
 
-	//partnum = threadIdx.x + blockDim.x * blockIdx.x;
-	//part = d_atom_list[partnum];
-	left[threadIdx.x] = d_atom_list[threadIdx.x + blockDim.x * blockIdx.x];
+	extern __shared__ atom smem[];
+	atom* R = (atom*)smem;
+	atom* L = (atom*)&R[blockDim.x];
+
+	L[threadIdx.x] = d_atom_list[threadIdx.x + blockIdx.x*blockDim.x];
 	__syncthreads();
-	//printf("\npartnum = %d\n", partnum);
-	//printf("\nblockIdx.x = %d\n", blockIdx.x);
-	//printf("\nnblocks = %d\n", nblocks);
 
-	for(i = blockIdx.x + 1; i < nblocks; ++i) {
+	for(i = blockIdx.x+1; i < nblocks; i++) {
 
-		//printf("\nblockIdx = %d\n", i);
-		s_atom_list[threadIdx.x] = d_atom_list[i*blockDim.x + threadIdx.x];
-		__syncthreads(); //maybe?
-		//printf("\nthreadIdx = %d\n", threadIdx.x);
-		//printf("\nblockIdx = %d\n", blockIdx.x);
+		R[threadIdx.x] = d_atom_list[threadIdx.x + i*blockDim.x];
+		__syncthreads();
 
-		for(j = 0; j < blockDim.x; ++j) {
-			//printf("\ndist = %f\n", dist);
-			//printf("\nalist part x = %f\n", s_atom_list[part].x_pos);
+		if(i*blockDim.x < d_PDH_acnt)
+		for(j = 0; j < blockDim.x; j++) {
+			
+			if(j + i*blockDim.x < d_PDH_acnt) {
+				xt = L[threadIdx.x].x_pos - R[j].x_pos;
+				yt = L[threadIdx.x].y_pos - R[j].y_pos;
+				zt = L[threadIdx.x].z_pos - R[j].z_pos;
 
-			dist = sqrt(
-				(left[threadIdx.x].x_pos - s_atom_list[j].x_pos)*(left[threadIdx.x].x_pos - s_atom_list[j].x_pos) +
-				(left[threadIdx.x].y_pos - s_atom_list[j].y_pos)*(left[threadIdx.x].y_pos - s_atom_list[j].y_pos) +
-				(left[threadIdx.x].z_pos - s_atom_list[j].z_pos)*(left[threadIdx.x].z_pos - s_atom_list[j].z_pos));
+				dist = sqrt(xt*xt + yt*yt + zt*zt);
 
-			//if(j == 2)
-				//printf("\ndist = %f\n", dist);
-			//__syncthreads();
+				h_pos = (int)(dist/d_PDH_res);
+
+				atomicAdd((unsigned long long int*)&d_histogram[h_pos].d_cnt,1);
+				__syncthreads();
+			}
+		}
+	}
+
+	for(j = threadIdx.x +1; j < blockDim.x; j++) {
+
+		if(j + blockIdx.x*blockDim.x < d_PDH_acnt) {
+			xt = L[threadIdx.x].x_pos - L[j].x_pos;
+			yt = L[threadIdx.x].y_pos - L[j].y_pos;
+			zt = L[threadIdx.x].z_pos - L[j].z_pos;
+
+			dist = sqrt(xt*xt + yt*yt + zt*zt);
+
 			h_pos = (int)(dist/d_PDH_res);
-			//printf("\nh_pos = %d\n", h_pos);
 
 			atomicAdd((unsigned long long int*)&d_histogram[h_pos].d_cnt,1);
-			//__syncthreads(); //maybe?
-			//printf()
+			__syncthreads();
 		}
-		//__syncthreads(); //maybe?
 	}
-	//__syncthreads();
-	for(i = threadIdx.x + 1; i < blockDim.x; ++i) {
+}
 
-		dist = sqrt(
-			(left[threadIdx.x].x_pos - left[i].x_pos)*(left[threadIdx.x].x_pos - left[i].x_pos) +
-			(left[threadIdx.x].y_pos - left[i].y_pos)*(left[threadIdx.x].y_pos - left[i].y_pos) +
-			(left[threadIdx.x].z_pos - left[i].z_pos)*(left[threadIdx.x].z_pos - left[i].z_pos));
+//CUDA KERNEL ALGO 3
+__global__ void PDH_Algo3(atom *d_atom_list, bucket *d_histogram, long long d_PDH_acnt, double d_PDH_res, int nbuckets, int nblocks) {
 
-		h_pos = (int)(dist/d_PDH_res);
+	register double dist, xt, yt, zt;
+	register int i, j, h_pos;
+	register atom L;
 
-		atomicAdd((unsigned long long int*)&d_histogram[h_pos].d_cnt,1);
+	extern __shared__ atom smem[];
+	atom* R = (atom*)smem;
+	bucket* s_hist = (bucket*)&R[blockDim.x];
+
+	if(threadIdx.x < nbuckets)
+		s_hist[threadIdx.x].d_cnt = 0;
+
+	L = d_atom_list[threadIdx.x + blockIdx.x*blockDim.x];
+	__syncthreads();
+
+	for(i = blockIdx.x+1; i < nblocks; i++) {
+
+		R[threadIdx.x] = d_atom_list[threadIdx.x + i*blockDim.x];
+		__syncthreads();
+
+		if(i*blockDim.x < d_PDH_acnt)
+		for(j = 0; j < blockDim.x; j++) {
+			
+			if(j + i*blockDim.x < d_PDH_acnt) {
+				xt = L.x_pos - R[j].x_pos;
+				yt = L.y_pos - R[j].y_pos;
+				zt = L.z_pos - R[j].z_pos;
+
+				dist = sqrt(xt*xt + yt*yt + zt*zt);
+
+				h_pos = (int)(dist/d_PDH_res);
+
+				atomicAdd((unsigned long long int*)&d_histogram[h_pos].d_cnt,1);
+				__syncthreads();
+			}
+		}
+	}
+
+	R[threadIdx.x] = L;
+	__syncthreads();
+	for(j = threadIdx.x +1; j < blockDim.x; j++) {
+
+		if(j + blockIdx.x*blockDim.x < d_PDH_acnt) {
+			xt = L.x_pos - R[j].x_pos;
+			yt = L.y_pos - R[j].y_pos;
+			zt = L.z_pos - R[j].z_pos;
+
+			dist = sqrt(xt*xt + yt*yt + zt*zt);
+
+			h_pos = (int)(dist/d_PDH_res);
+
+			atomicAdd((unsigned long long int*)&d_histogram[h_pos].d_cnt,1);
+			__syncthreads();
+		}
 	}
 }
 
@@ -250,24 +298,15 @@ float CudaPrep(bucket * histogram2) {
 	cudaSetDevice(dev);
     cudaDeviceProp deviceProp;
     cudaGetDeviceProperties(&deviceProp, dev);
-	//printf("\nWARP = %d\n", deviceProp.warpSize);
-	dim3 threads(deviceProp.warpSize);
+	
+	dim3 threads(64);
+	//dim3 threads(deviceProp.warpSize);
 	dim3 grid(ceil((float)PDH_acnt/threads.x));
 
 	//Device Vars
 	bucket *d_histogram;
 	atom *d_atom_list;
-
-	/* NEW SHIT */
-
-	//kernel execution time crap
-	float elapsedTime;
-	cudaEvent_t start, stop;
-	cudaEventCreate(&start);
-	cudaEventCreate(&stop);
-
-	//kernel execution start
-	cudaEventRecord(start, 0);
+	int num_blocks = ceil((float)PDH_acnt/threads.x);
 
 	//Allocate device memory
 	cudaMalloc((void **) &d_histogram, size_hist);
@@ -277,25 +316,30 @@ float CudaPrep(bucket * histogram2) {
 	cudaMemcpy(d_atom_list, atom_list, size_atom, cudaMemcpyHostToDevice);
 	cudaMemset(d_histogram, 0, size_hist);
 
+	//kernel execution time crap
+	float elapsedTime;
+	cudaEvent_t start, stop;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+	cudaEventRecord(start, 0);
 	//run cuda kernel
-	PDH_Cuda_0<<<grid,threads>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res);
-	//PDH_Cuda_1<<<grid,threads,threads.x*sizeof(atom) + threads.x*sizeof(atom)>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res, threads.x, grid.x, num_buckets);
-	//PDH_Cuda_1<<<grid,threads>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res, threads.x, grid.x, num_buckets);
-
-	//copy new gpu histogram back to host from device
-	cudaMemcpy(histogram2, d_histogram, size_hist, cudaMemcpyDeviceToHost);
-
+	//PDH_Algo1<<<grid,threads>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res);
+	//PDH_Algo2<<<grid, threads, 2*threads.x*sizeof(atom)>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res, num_buckets, num_blocks);
+	PDH_Algo3<<<grid, threads, threads.x*sizeof(atom) + num_buckets*sizeof(bucket)>>>(d_atom_list, d_histogram, PDH_acnt, PDH_res, num_buckets, num_blocks);
 	//kernel execution stop
+	cudaDeviceSynchronize();
 	cudaEventRecord(stop, 0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&elapsedTime, start, stop);
 	cudaEventDestroy(start);
 	cudaEventDestroy(stop);
 
+	//copy new gpu histogram back to host from device
+	cudaMemcpy(histogram2, d_histogram, size_hist, cudaMemcpyDeviceToHost);
+
 	//free device memory
 	cudaFree(d_histogram); cudaFree(d_atom_list);
 
-	//returns kernel execution time
 	return elapsedTime;
 }
 
@@ -334,7 +378,6 @@ int main(int argc, char **argv)
 
 
 	/* NEW SHIT */
-	
 
 	//New histogram that will come from the device
 	bucket *histogram2 = (bucket*)malloc(sizeof(bucket)*num_buckets);
@@ -356,18 +399,10 @@ int main(int argc, char **argv)
 	printf("\nCPU vs GPU Histogram Differences\n");
 	output_histogram(histogram, histogram2);
 
-	//testing
-	// double test = 0.0;
-	// printf("\nSize of atom_list = %lu\n", sizeof(atom)*PDH_acnt);
-
 	//Free memory.
 	free(histogram); free(atom_list);
 
-	//prints kernel execution time in milliseconds.
 	printf("\n******** Total Running Time of Kernel = %0.5f ms *******\n", elapsedTime);
-
-	//prints kernel execution time in seconds.
-	printf("\n******** Total Running Time of Kernel = %0.5f sec *******\n", elapsedTime/1000);
 	
 	return 0;
 }
